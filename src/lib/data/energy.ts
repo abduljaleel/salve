@@ -202,6 +202,102 @@ function generateDailyLogs(): DailyLog[] {
 export const dailyLogs: DailyLog[] = generateDailyLogs();
 export const todayLog: DailyLog | undefined = dailyLogs[dailyLogs.length - 1];
 
+// ── SMILE Framework (from Smil E Advisory / Notion) ──────────────────────
+// Inspired by Václav Smil's interdisciplinary approach and the SuperMe EOS
+// The SMILE Framework = Sustainable Management, Innovation, Leadership, Efficiency
+
+export interface SmilePillar {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  metrics: string[];
+}
+
+export const smileFramework: SmilePillar[] = [
+  {
+    id: "energy-resilience",
+    name: "Energy Resilience & Efficiency",
+    description: "Strategies for personal energy systems — sleep architecture, nutrition timing, recovery protocols, and sustainable output without burnout.",
+    icon: "bolt",
+    metrics: ["Sleep Quality Index", "Recovery Score", "Sustained Output Hours", "Burnout Risk"],
+  },
+  {
+    id: "material-efficiency",
+    name: "Resource Efficiency & Circularity",
+    description: "Optimize how you allocate attention, time, and cognitive resources. Reduce waste in your daily operating model.",
+    icon: "zap",
+    metrics: ["Focus-to-Distraction Ratio", "Context Switch Count", "Deep Work Blocks", "Energy ROI"],
+  },
+  {
+    id: "emotional-systems",
+    name: "Emotional Operating System",
+    description: "Adaptive emotional wellness — mood regulation, stress management, resilience building, and crisis prediction. Inspired by SuperMe EOS.",
+    icon: "heart",
+    metrics: ["Mood Stability Index", "Stress Recovery Time", "Emotional Resilience Score", "Crisis Risk"],
+  },
+  {
+    id: "adaptation",
+    name: "Adaptation & Growth",
+    description: "Build adaptive capacity — respond to change, learn from setbacks, design resilient personal systems that improve under pressure.",
+    icon: "activity",
+    metrics: ["Adaptation Speed", "Learning Velocity", "Setback Recovery", "Growth Trajectory"],
+  },
+  {
+    id: "capacity-building",
+    name: "Knowledge & Capacity Building",
+    description: "Tools and training to enhance your personal operating system — habits, routines, decision frameworks, and sustainable performance patterns.",
+    icon: "book",
+    metrics: ["Habit Compliance", "Protocol Adherence", "Self-Assessment Accuracy", "Improvement Rate"],
+  },
+];
+
+// ── Enterprise Programs (SMILE-powered) ──────────────────────────────────
+
+export interface EnterpriseProgram {
+  id: string;
+  name: string;
+  description: string;
+  durationWeeks: number;
+  participantCount: number;
+  avgEnergyLift: number;
+  status: "active" | "completed" | "draft";
+  pillars: string[];
+}
+
+export const enterprisePrograms: EnterpriseProgram[] = [
+  {
+    id: "prog-1",
+    name: "Executive Energy Reset",
+    description: "8-week program for leadership teams combining the SMILE Framework with individual energy diagnostics and team-level interventions.",
+    durationWeeks: 8,
+    participantCount: 12,
+    avgEnergyLift: 18,
+    status: "active",
+    pillars: ["energy-resilience", "emotional-systems", "adaptation"],
+  },
+  {
+    id: "prog-2",
+    name: "Engineering Team Sustainability",
+    description: "Focus-intensive program for engineering teams — deep work protocols, burnout prevention, and cognitive resource optimization.",
+    durationWeeks: 6,
+    participantCount: 24,
+    avgEnergyLift: 14,
+    status: "active",
+    pillars: ["material-efficiency", "energy-resilience", "capacity-building"],
+  },
+  {
+    id: "prog-3",
+    name: "Founder Resilience Protocol",
+    description: "High-intensity protocol for founders — emotional operating system setup, stress inoculation, and adaptive capacity building.",
+    durationWeeks: 12,
+    participantCount: 6,
+    avgEnergyLift: 22,
+    status: "completed",
+    pillars: ["emotional-systems", "adaptation", "energy-resilience"],
+  },
+];
+
 // ── 30-Day Sparkline Data ──────────────────────────────────────────────────
 
 export const sparklineData = dailyLogs.map((log) => ({
