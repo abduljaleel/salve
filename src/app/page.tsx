@@ -2,186 +2,318 @@ import Link from "next/link";
 import { appConfig } from "@/lib/config";
 
 export default function LandingPage() {
-  // 30-day trend data
-  const trendData = [
-    68, 72, 65, 74, 78, 71, 69, 80, 82, 76,
-    73, 70, 85, 88, 79, 74, 71, 68, 72, 77,
-    81, 84, 76, 73, 92, 78, 80, 83, 74, 79,
+  const accent = "#e06080";
+  const dark = "#0a0608";
+  const surface = "#13090d";
+  const border = "#2a151c";
+  const muted = "#8a6b74";
+  const text = "#e8d5db";
+
+  const loopStages = [
+    { key: "01", label: "DETECT", detail: "Regression in production traces" },
+    { key: "02", label: "IDENTIFY", detail: "Commit a3f4e2 → +12% latency" },
+    { key: "03", label: "RESPOND", detail: "Auto-rollback, isolate change" },
+    { key: "04", label: "REMEMBER", detail: "Add regression test for pattern" },
   ];
 
-  const bestDay = Math.max(...trendData);
+  const timeline = [
+    { time: "10:14:02", msg: "Latency spike detected on /api/checkout (p95 880ms → 2,400ms)", tone: "alert" },
+    { time: "10:14:15", msg: "Tracing dip to commit a3f4e2 by alice@team", tone: "info" },
+    { time: "10:14:18", msg: "Diagnostic: N+1 query introduced in OrderService.fetchItems", tone: "info" },
+    { time: "10:14:21", msg: "Rolling back commit on canary cluster", tone: "act" },
+    { time: "10:14:32", msg: "p95 restored: 870ms. Filing PR #4823 with fix.", tone: "ok" },
+  ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-gray-900">
-      {/* Minimal Nav */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-          <span className="text-sm font-semibold tracking-wide text-gray-500 uppercase">{appConfig.name}</span>
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: dark, color: text }}>
+      {/* Nav */}
+      <header style={{ borderBottom: `1px solid ${border}` }}>
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: accent, boxShadow: `0 0 10px ${accent}` }}
+            />
+            <span className="font-semibold tracking-wide" style={{ color: text }}>
+              {appConfig.name}
+            </span>
+            <span className="text-xs font-mono hidden sm:inline" style={{ color: muted }}>
+              salve.dk &middot; Copenhagen
+            </span>
+          </div>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+            <Link href="/login" className="text-sm transition-colors" style={{ color: muted }}>
               Sign in
             </Link>
             <Link
               href="/signup"
-              className="inline-flex items-center rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              style={{ border: `1px solid ${accent}`, color: accent }}
             >
-              Get started
+              Get access
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Hero — The Pulse */}
-      <section className="flex flex-col items-center justify-center pt-32 pb-20 px-6">
-        {/* Pulsing circle */}
-        <div className="relative flex items-center justify-center" style={{ width: '60vw', height: '60vw', maxWidth: '520px', maxHeight: '520px' }}>
-          <svg
-            viewBox="0 0 400 400"
-            className="absolute inset-0 w-full h-full"
-            style={{
-              animation: 'pulse-breathe 3s ease-in-out infinite',
-            }}
-          >
-            <circle cx="200" cy="200" r="195" fill="none" stroke="#f97316" strokeWidth="2" opacity="0.3" />
-            <circle cx="200" cy="200" r="185" fill="none" stroke="#f97316" strokeWidth="1" opacity="0.15" />
-            <circle cx="200" cy="200" r="198" fill="#fff7ed" fillOpacity="0.5" stroke="#f97316" strokeWidth="3" />
-          </svg>
-          <div className="relative flex flex-col items-center justify-center z-10">
-            <span className="text-9xl font-extralight tracking-tighter text-gray-900" style={{ lineHeight: '1' }}>74</span>
-            <span className="text-2xl font-light text-gray-400 mt-2">/100</span>
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl w-full px-6 pt-24 pb-16">
+        <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] items-center">
+          <div>
+            <p className="text-xs font-mono tracking-widest uppercase mb-6" style={{ color: accent }}>
+              Infrastructure / Self-healing systems
+            </p>
+            <h1
+              className="text-7xl sm:text-8xl font-normal tracking-tight leading-[0.95]"
+              style={{ fontFamily: 'Georgia, "Times New Roman", serif', color: text }}
+            >
+              Salve
+            </h1>
+            <p className="mt-4 text-sm italic" style={{ color: muted, fontFamily: 'Georgia, serif' }}>
+              <em>n.</em> Latin, &ldquo;be well&rdquo; &mdash; also, a healing balm.
+            </p>
+            <p className="mt-8 text-2xl font-light leading-relaxed" style={{ color: text }}>
+              Self-healing infrastructure via commit-level regression tracing.
+            </p>
+            <p className="mt-5 text-base leading-relaxed" style={{ color: muted }}>
+              A bad commit broke prod. Which commit? Nobody knows.
+              Salve listens to your traces, isolates the regression at the line of code,
+              rolls back the change, and writes the test so it never returns.
+            </p>
+            <div className="mt-10 flex flex-wrap items-center gap-4">
+              <Link
+                href="/signup"
+                className="inline-flex items-center rounded-full px-7 py-3 text-base font-medium"
+                style={{ backgroundColor: accent, color: dark }}
+              >
+                Connect a repository &rarr;
+              </Link>
+              <span className="text-xs font-mono" style={{ color: muted }}>
+                From Copenhagen &mdash; biotech capital, where biology informs systems.
+              </span>
+            </div>
+          </div>
+
+          {/* Immune system loop SVG */}
+          <div className="relative flex items-center justify-center">
+            <svg viewBox="0 0 420 420" className="w-full max-w-md">
+              <defs>
+                <marker id="salve-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill={accent} />
+                </marker>
+                <radialGradient id="salve-glow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor={accent} stopOpacity="0.18" />
+                  <stop offset="100%" stopColor={accent} stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              <circle cx="210" cy="210" r="200" fill="url(#salve-glow)" />
+              <circle cx="210" cy="210" r="150" fill="none" stroke={border} strokeWidth="1" strokeDasharray="2 4" />
+
+              {/* Arc arrows between nodes */}
+              {[0, 1, 2, 3].map((i) => {
+                const a1 = (i * 90 - 90) * (Math.PI / 180);
+                const a2 = ((i + 1) * 90 - 90) * (Math.PI / 180);
+                const x1 = 210 + Math.cos(a1 + 0.35) * 150;
+                const y1 = 210 + Math.sin(a1 + 0.35) * 150;
+                const x2 = 210 + Math.cos(a2 - 0.35) * 150;
+                const y2 = 210 + Math.sin(a2 - 0.35) * 150;
+                return (
+                  <path
+                    key={i}
+                    d={`M ${x1} ${y1} A 150 150 0 0 1 ${x2} ${y2}`}
+                    fill="none"
+                    stroke={accent}
+                    strokeWidth="1.2"
+                    opacity="0.7"
+                    markerEnd="url(#salve-arrow)"
+                  />
+                );
+              })}
+
+              {/* Stage nodes */}
+              {loopStages.map((stage, i) => {
+                const angle = (i * 90 - 90) * (Math.PI / 180);
+                const cx = 210 + Math.cos(angle) * 150;
+                const cy = 210 + Math.sin(angle) * 150;
+                return (
+                  <g key={stage.key}>
+                    <circle cx={cx} cy={cy} r="32" fill={surface} stroke={accent} strokeWidth="1.5" />
+                    <text
+                      x={cx}
+                      y={cy - 4}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fontFamily="ui-monospace, monospace"
+                      fill={muted}
+                    >
+                      {stage.key}
+                    </text>
+                    <text
+                      x={cx}
+                      y={cy + 9}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="700"
+                      fontFamily="ui-monospace, monospace"
+                      fill={accent}
+                    >
+                      {stage.label}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Centre label */}
+              <text
+                x="210"
+                y="200"
+                textAnchor="middle"
+                fontSize="10"
+                fontFamily="ui-monospace, monospace"
+                fill={muted}
+              >
+                IMMUNE LOOP
+              </text>
+              <text
+                x="210"
+                y="220"
+                textAnchor="middle"
+                fontSize="22"
+                fontFamily="Georgia, serif"
+                fill={text}
+              >
+                Salve
+              </text>
+            </svg>
           </div>
         </div>
 
-        <p className="mt-8 text-xl text-gray-600 font-light tracking-wide">Your energy score right now.</p>
-        <p className="mt-3 text-base text-gray-400 tracking-wide">Measure it. Optimize it. Protect it.</p>
-      </section>
-
-      {/* Four Quadrant Display */}
-      <section className="mx-auto max-w-2xl w-full px-6 pb-20">
-        <div className="grid grid-cols-2 gap-4">
-          {[
-            { label: "Physical", score: 82, color: "#22c55e", bgColor: "#f0fdf4" },
-            { label: "Mental", score: 68, color: "#3b82f6", bgColor: "#eff6ff" },
-            { label: "Emotional", score: 71, color: "#eab308", bgColor: "#fefce8" },
-            { label: "Social", score: 76, color: "#a855f7", bgColor: "#faf5ff" },
-          ].map((q) => (
+        {/* Stage descriptions */}
+        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {loopStages.map((s) => (
             <div
-              key={q.label}
-              className="rounded-xl p-6 relative overflow-hidden"
-              style={{
-                backgroundColor: q.bgColor,
-                borderLeft: `4px solid ${q.color}`,
-              }}
+              key={s.key}
+              className="rounded-lg p-4"
+              style={{ border: `1px solid ${border}`, backgroundColor: surface }}
             >
-              <p className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: q.color }}>{q.label}</p>
-              <p className="text-4xl font-extralight text-gray-900 mb-3" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{q.score}</p>
-              {/* Progress bar */}
-              <div className="w-full h-1.5 rounded-full bg-gray-200/60">
-                <div
-                  className="h-1.5 rounded-full transition-all"
-                  style={{
-                    width: `${q.score}%`,
-                    backgroundColor: q.color,
-                  }}
-                />
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-mono" style={{ color: muted }}>{s.key}</span>
+                <span className="text-sm font-mono font-bold tracking-wider" style={{ color: accent }}>{s.label}</span>
               </div>
+              <p className="mt-2 text-sm leading-relaxed" style={{ color: text }}>{s.detail}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Today's Protocol */}
-      <section className="mx-auto max-w-2xl w-full px-6 pb-20">
-        <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-6">Today&apos;s Protocol</p>
-        <div className="rounded-2xl bg-gray-50 p-6 space-y-0">
-          {[
-            { done: true, text: "Wake by 6:30 AM", streak: "streak: 12 days" },
-            { done: true, text: "10 min meditation", streak: null },
-            { done: false, text: "Cold shower", streak: null },
-            { done: true, text: "Journal 3 gratitudes", streak: null },
-            { done: false, text: "30 min exercise", streak: null },
-          ].map((item, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 py-3.5"
-              style={{ borderBottom: i < 4 ? '1px solid #f3f4f6' : 'none' }}
-            >
-              <span className="text-lg" style={{ fontFamily: 'system-ui', width: '24px', textAlign: 'center' }}>
-                {item.done ? (
-                  <span className="text-green-500">&#9745;</span>
-                ) : (
-                  <span className="text-gray-300">&#9744;</span>
-                )}
-              </span>
-              <span className={`text-base ${item.done ? 'text-gray-700' : 'text-gray-400'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {item.text}
-              </span>
-              {item.streak && (
-                <span className="ml-auto text-xs text-orange-500 font-medium bg-orange-50 px-2.5 py-1 rounded-full">
-                  {item.streak}
-                </span>
-              )}
-            </div>
-          ))}
+      {/* Incident timeline */}
+      <section className="mx-auto max-w-6xl w-full px-6 pb-20">
+        <div className="flex items-baseline justify-between mb-5">
+          <p className="text-xs font-mono tracking-widest uppercase" style={{ color: accent }}>
+            Live incident &mdash; Oct 14, 10:14 UTC
+          </p>
+          <span className="text-xs font-mono" style={{ color: muted }}>
+            resolved in 30s
+          </span>
         </div>
-      </section>
-
-      {/* 30-Day Trend */}
-      <section className="mx-auto max-w-2xl w-full px-6 pb-20">
-        <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-6">30-Day Trend</p>
-        <div className="rounded-2xl bg-gray-50 p-6">
-          <div className="flex items-end gap-1 h-24">
-            {trendData.map((score, i) => {
-              const height = (score / 100) * 100;
-              let color = "#ef4444"; // red < 50
-              if (score >= 70) color = "#22c55e"; // green
-              else if (score >= 50) color = "#eab308"; // yellow
+        <div
+          className="rounded-xl overflow-hidden"
+          style={{ border: `1px solid ${border}`, backgroundColor: surface }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-3 text-xs font-mono"
+            style={{ borderBottom: `1px solid ${border}`, color: muted, backgroundColor: dark }}
+          >
+            <span>$ salve watch --service checkout</span>
+            <span className="flex items-center gap-2">
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+              streaming
+            </span>
+          </div>
+          <div className="p-5 space-y-2 font-mono text-sm leading-relaxed">
+            {timeline.map((line, i) => {
+              const colorMap: Record<string, string> = {
+                alert: "#ef6b85",
+                info: text,
+                act: "#f0b070",
+                ok: "#7adfa0",
+              };
               return (
-                <div
-                  key={i}
-                  className="flex-1 rounded-sm transition-all"
-                  style={{
-                    height: `${height}%`,
-                    backgroundColor: color,
-                    opacity: 0.8,
-                    minWidth: '4px',
-                  }}
-                />
+                <div key={i} className="flex gap-4">
+                  <span style={{ color: muted, minWidth: "84px" }}>{line.time}</span>
+                  <span style={{ color: colorMap[line.tone] }}>{line.msg}</span>
+                </div>
               );
             })}
           </div>
-          <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
-            <span>Your best day: <span className="font-semibold text-gray-700">{bestDay}</span></span>
-            <span>Your trend: <span className="font-semibold text-green-600">&#8593; improving</span></span>
-          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {[
+            { label: "Mean time to detect", value: "13s" },
+            { label: "Mean time to recover", value: "30s" },
+            { label: "Outages prevented this quarter", value: "47" },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="rounded-lg px-5 py-6"
+              style={{ border: `1px solid ${border}`, backgroundColor: surface }}
+            >
+              <p
+                className="text-4xl font-normal"
+                style={{ fontFamily: 'Georgia, serif', color: accent }}
+              >
+                {s.value}
+              </p>
+              <p className="mt-2 text-xs font-mono tracking-wider uppercase" style={{ color: muted }}>
+                {s.label}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* CTA */}
-      <section className="flex flex-col items-center pb-24 px-6">
-        <Link
-          href="/signup"
-          className="inline-flex items-center rounded-full bg-orange-500 px-10 py-4 text-lg font-semibold text-white hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
+      <section className="mx-auto max-w-3xl w-full px-6 pb-24 text-center">
+        <h2
+          className="text-4xl sm:text-5xl font-normal leading-tight"
+          style={{ fontFamily: "Georgia, serif", color: text }}
         >
-          Start your diagnostic &rarr;
-        </Link>
+          Give your infrastructure an immune system.
+        </h2>
+        <p className="mt-5 text-base" style={{ color: muted }}>
+          Salve installs in fifteen minutes. The first regression it catches usually pays for the year.
+        </p>
+        <div className="mt-8 flex justify-center">
+          <Link
+            href="/signup"
+            className="inline-flex items-center rounded-full px-8 py-3 text-base font-medium"
+            style={{ backgroundColor: accent, color: dark }}
+          >
+            Connect a repository &rarr;
+          </Link>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-100">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6 text-xs text-gray-400">
-          <span>&copy; {new Date().getFullYear()} {appConfig.name}</span>
-          <span>A 12 Cities venture</span>
+      <footer style={{ borderTop: `1px solid ${border}` }}>
+        <div className="mx-auto flex flex-col sm:flex-row gap-3 max-w-6xl items-center justify-between px-6 py-6 text-xs font-mono">
+          <span style={{ color: muted }}>
+            {appConfig.name} &middot; Copenhagen &middot; &copy; {new Date().getFullYear()}
+          </span>
+          <a
+            href="https://abduljaleel.xyz/aletheia/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors"
+            style={{ border: `1px solid ${border}`, color: accent }}
+          >
+            PART OF THE ALETHEIA STACK &#8599;
+          </a>
         </div>
       </footer>
-
-      {/* CSS Animation */}
-      <style>{`
-        @keyframes pulse-breathe {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.02); }
-        }
-      `}</style>
     </div>
   );
 }
