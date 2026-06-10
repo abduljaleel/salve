@@ -1,20 +1,47 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  protocols,
-  getWeeklyComplianceGrid,
   protocolTypeLabels,
   protocolTypeColors,
   dimensionIcons,
 } from "@/lib/data/energy";
-import { ArrowLeft, Flame, CheckCircle2, Circle } from "lucide-react";
+import {
+  getProtocol,
+  toDateStr,
+  toggleHabitCompletion,
+  type ApiProtocol,
+} from "@/lib/data/api";
+import { ArrowLeft, Flame, CheckCircle2, Circle, Loader2 } from "lucide-react";
 
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Builds this week's (Mon–Sun) compliance grid from the persisted completion history. */
+function buildWeeklyGrid(
+  protocol: ApiProtocol
+): Record<string, ("done" | "missed" | "future")[]> {
+  const today = new Date();
+  const dow = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const grid: Record<string, ("done" | "missed" | "future")[]> = {};
+  for (const habit of protocol.habits) {
+    const completed = new Set(protocol.meta.completions[habit.id] ?? []);
+    grid[habit.id] = Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + i);
+      const dayStr = toDateStr(day);
+      if (dayStr > toDateStr(today)) return "future";
+      return completed.has(dayStr) ? "done" : "missed";
+    });
+  }
+  return grid;
+}
 
 export default function ProtocolDetailPage({
   params,
@@ -22,12 +49,58 @@ export default function ProtocolDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const protocol = protocols.find((p) => p.id === id);
+  const [protocol, setProtocol] = useState<ApiProtocol | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const fetched = await getProtocol(id);
+        if (!cancelled) setProtocol(fetched);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load protocol");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  async function handleToggle(habitId: string) {
+    if (!protocol) return;
+    try {
+      const updated = await toggleHabitCompletion(protocol, habitId);
+      setProtocol(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update habit");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center py-24 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span className="text-sm">Loading protocol…</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!protocol) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Protocol Not Found</h1>
+        {error && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <Link href="/protocols">
           <Button variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" /> Back to Protocols
@@ -37,7 +110,7 @@ export default function ProtocolDetailPage({
     );
   }
 
-  const grid = getWeeklyComplianceGrid(protocol.id);
+  const grid = buildWeeklyGrid(protocol);
   const completedToday = protocol.habits.filter((h) => h.completedToday).length;
   const totalHabits = protocol.habits.length;
   const bestStreak = Math.max(...protocol.habits.map((h) => h.streak), 0);
@@ -70,6 +143,12 @@ export default function ProtocolDetailPage({
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -105,41 +184,48 @@ export default function ProtocolDetailPage({
             <div className="h-2 rounded-full bg-muted overflow-hidden mt-1 max-w-xs">
               <div
                 className="h-full rounded-full bg-green-500 transition-all"
-                style={{ width: `${(completedToday / totalHabits) * 100}%` }}
+                style={{
+                  width: `${totalHabits > 0 ? (completedToday / totalHabits) * 100 : 0}%`,
+                }}
               />
             </div>
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {protocol.habits.map((habit) => (
-              <div
-                key={habit.id}
-                className="flex items-center gap-3 group"
-              >
-                {habit.completedToday ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
-                ) : (
-                  <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
-                )}
-                <span className="text-sm mr-1">
-                  {dimensionIcons[habit.category]}
-                </span>
-                <span
-                  className={`text-sm flex-1 ${
-                    habit.completedToday ? "line-through text-muted-foreground" : ""
-                  }`}
+          {protocol.habits.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No habits in this protocol yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {protocol.habits.map((habit) => (
+                <div
+                  key={habit.id}
+                  className="flex items-center gap-3 group cursor-pointer"
+                  onClick={() => void handleToggle(habit.id)}
                 >
-                  {habit.name}
-                </span>
-                {habit.streak > 0 && (
-                  <span className="text-xs text-orange-500 font-medium flex items-center gap-1">
-                    <Flame className="h-3 w-3" /> {habit.streak}d
+                  {habit.completedToday ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground" />
+                  )}
+                  <span className="text-sm mr-1">
+                    {dimensionIcons[habit.category]}
                   </span>
-                )}
-              </div>
-            ))}
-          </div>
+                  <span
+                    className={`text-sm flex-1 ${
+                      habit.completedToday ? "line-through text-muted-foreground" : ""
+                    }`}
+                  >
+                    {habit.name}
+                  </span>
+                  {habit.streak > 0 && (
+                    <span className="text-xs text-orange-500 font-medium flex items-center gap-1">
+                      <Flame className="h-3 w-3" /> {habit.streak}d
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

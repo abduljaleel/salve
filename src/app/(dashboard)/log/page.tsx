@@ -1,30 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  dailyLogs,
   moodEmojis,
   getEnergyCalendarClass,
   type DailyLog,
 } from "@/lib/data/energy";
-import { CalendarDays, PenLine } from "lucide-react";
+import { listDailyLogs, upsertDailyLog, todayStr } from "@/lib/data/api";
+import { CalendarDays, PenLine, Loader2 } from "lucide-react";
 
 const moodOptions: DailyLog["mood"][] = ["great", "good", "okay", "low", "bad"];
 
 function CalendarGrid({ logs }: { logs: DailyLog[] }) {
   // Build a 5-week calendar for the last 35 days
-  const today = new Date(2026, 3, 11);
+  const today = new Date();
   const cells: { date: Date; log?: DailyLog }[] = [];
 
   for (let i = 34; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
     cells.push({ date: d, log: logs.find((l) => l.date === dateStr) });
   }
 
@@ -52,9 +54,7 @@ function CalendarGrid({ logs }: { logs: DailyLog[] }) {
           if (!cell) {
             return <div key={`pad-${i}`} className="h-8 w-full" />;
           }
-          const isToday =
-            cell.date.toISOString().split("T")[0] ===
-            today.toISOString().split("T")[0];
+          const isToday = cell.date.toDateString() === today.toDateString();
           return (
             <div
               key={i}
@@ -102,10 +102,69 @@ export default function LogPage() {
   const [stressLevel, setStressLevel] = useState(2);
   const [notes, setNotes] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<DailyLog[]>([]);
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const fetched = await listDailyLogs(35);
+        if (cancelled) return;
+        setLogs(fetched);
+        // Prefill the form from today's log if it exists.
+        const todays = fetched.find((l) => l.date === todayStr());
+        if (todays) {
+          setEnergy(todays.energyScore);
+          setMood(todays.mood);
+          setSleepHours(String(todays.sleepHours));
+          setSleepQuality(todays.sleepQuality);
+          setExerciseMin(String(todays.exerciseMinutes));
+          setFocusHours(String(todays.focusHours));
+          setStressLevel(todays.stressLevel);
+          setNotes(todays.notes);
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load logs");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const log: DailyLog = {
+        date: todayStr(),
+        energyScore: energy,
+        mood,
+        sleepHours: Number(sleepHours) || 0,
+        sleepQuality,
+        exerciseMinutes: Number(exerciseMin) || 0,
+        focusHours: Number(focusHours) || 0,
+        stressLevel,
+        notes,
+      };
+      const savedLog = await upsertDailyLog(log);
+      setLogs((prev) => {
+        const without = prev.filter((l) => l.date !== savedLog.date);
+        return [...without, savedLog].sort((a, b) => a.date.localeCompare(b.date));
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save log");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -123,7 +182,7 @@ export default function LogPage() {
               <PenLine className="h-4 w-4" /> Log Today
             </CardTitle>
             <CardDescription>
-              {new Date(2026, 3, 11).toLocaleDateString("en-US", {
+              {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 month: "long",
                 day: "numeric",
@@ -135,6 +194,11 @@ export default function LogPage() {
             {saved && (
               <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
                 Log saved successfully!
+              </div>
+            )}
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {error}
               </div>
             )}
 
@@ -266,8 +330,14 @@ export default function LogPage() {
               />
             </div>
 
-            <Button onClick={handleSave} className="w-full">
-              Save Today&apos;s Log
+            <Button onClick={handleSave} className="w-full" disabled={saving || loading}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                </>
+              ) : (
+                <>Save Today&apos;s Log</>
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -280,7 +350,14 @@ export default function LogPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <CalendarGrid logs={dailyLogs} />
+            {loading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                <span className="text-sm">Loading history…</span>
+              </div>
+            ) : (
+              <CalendarGrid logs={logs} />
+            )}
           </CardContent>
         </Card>
       </div>

@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { assessmentQuestions, type Dimension } from "@/lib/data/energy";
-import { ArrowRight, ArrowLeft, RotateCcw } from "lucide-react";
+import { createEnergyProfile } from "@/lib/data/api";
+import { ArrowRight, ArrowLeft, RotateCcw, Loader2, CheckCircle2 } from "lucide-react";
 
 const dimensions: Dimension[] = ["physical", "mental", "emotional", "social"];
 const dimensionLabels: Record<Dimension, string> = {
@@ -160,6 +161,8 @@ export default function AssessPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentStep, setCurrentStep] = useState(0); // 0-3 for dimensions, 4 for results
   const [showResults, setShowResults] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const currentDimension = dimensions[currentStep];
   const currentQuestions = assessmentQuestions.filter(
@@ -192,11 +195,33 @@ export default function AssessPage() {
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
   }, [dimensionScores]);
 
+  async function persistProfile() {
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      const sleepAnswer = answers["p1"] ?? 3; // "How well did you sleep last night?"
+      const stressAnswer = answers["e2"] ?? 3; // "How well are you managing stress?"
+      const chronotype =
+        sleepAnswer >= 4 ? "early_bird" : sleepAnswer <= 2 ? "night_owl" : "third_bird";
+      await createEnergyProfile({
+        baselineScores: dimensionScores,
+        chronotype,
+        stressLevel: 6 - stressAnswer,
+        sleepQuality: sleepAnswer,
+      });
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+      setSaveError(e instanceof Error ? e.message : "Failed to save your profile");
+    }
+  }
+
   function handleNext() {
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     } else {
       setShowResults(true);
+      void persistProfile();
     }
   }
 
@@ -213,6 +238,8 @@ export default function AssessPage() {
     setAnswers({});
     setCurrentStep(0);
     setShowResults(false);
+    setSaveState("idle");
+    setSaveError(null);
   }
 
   if (showResults) {
@@ -231,6 +258,25 @@ export default function AssessPage() {
             Retake
           </Button>
         </div>
+
+        {saveState === "saving" && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Saving your energy profile…
+          </div>
+        )}
+        {saveState === "saved" && (
+          <div className="flex items-center gap-2 text-sm text-green-600">
+            <CheckCircle2 className="h-4 w-4" /> Energy profile saved
+          </div>
+        )}
+        {saveState === "error" && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {saveError ?? "Failed to save your profile"}{" "}
+            <button className="underline font-medium" onClick={() => void persistProfile()}>
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Radar Chart */}

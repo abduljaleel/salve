@@ -1,15 +1,30 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { getEnergyColor, type DailyLog, type Dimension, type DimensionScore } from "@/lib/data/energy";
 import {
-  overallEnergyScore,
-  currentDimensionScores,
-  protocols,
-  sparklineData,
-  currentStreak,
-  getEnergyColor,
-} from "@/lib/data/energy";
-import { TrendingUp, TrendingDown, Minus, Flame, CheckCircle2, Circle } from "lucide-react";
+  deriveDimensionScores,
+  listDailyLogs,
+  listEnergyProfiles,
+  listProtocols,
+  seedDemoData,
+  toDateStr,
+  toggleHabitCompletion,
+  type ApiProtocol,
+  type EnergyProfile,
+} from "@/lib/data/api";
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Flame,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 
 function EnergyCircle({ score }: { score: number }) {
   const radius = 80;
@@ -86,9 +101,174 @@ function Sparkline({ data }: { data: { date: string; score: number }[] }) {
   );
 }
 
+const DIMENSION_META: Record<Dimension, { label: string; color: string; bgColor: string }> = {
+  physical: { label: "Physical", color: "#22c55e", bgColor: "#f0fdf4" },
+  mental: { label: "Mental", color: "#3b82f6", bgColor: "#eff6ff" },
+  emotional: { label: "Emotional", color: "#f59e0b", bgColor: "#fffbeb" },
+  social: { label: "Social", color: "#a855f7", bgColor: "#faf5ff" },
+};
+const DIMENSIONS: Dimension[] = ["physical", "mental", "emotional", "social"];
+
+function averageDimensions(logs: DailyLog[]): Record<Dimension, number> {
+  const totals: Record<Dimension, number> = { physical: 0, mental: 0, emotional: 0, social: 0 };
+  if (logs.length === 0) return totals;
+  for (const log of logs) {
+    const derived = deriveDimensionScores(log);
+    for (const dim of DIMENSIONS) totals[dim] += derived[dim];
+  }
+  for (const dim of DIMENSIONS) totals[dim] = Math.round(totals[dim] / logs.length);
+  return totals;
+}
+
+function buildDimensionScores(
+  profiles: EnergyProfile[],
+  logs: DailyLog[]
+): DimensionScore[] {
+  const recent = averageDimensions(logs.slice(-7));
+  const prior = averageDimensions(logs.slice(-14, -7));
+  const hasLogs = logs.length > 0;
+  const base = profiles[0]?.baselineScores ?? (hasLogs ? recent : null);
+
+  return DIMENSIONS.map((dim) => {
+    const score = base ? base[dim] : 0;
+    let trend: DimensionScore["trend"] = "stable";
+    if (profiles.length >= 2) {
+      const prev = profiles[1].baselineScores[dim];
+      trend = score > prev ? "up" : score < prev ? "down" : "stable";
+    } else if (logs.length >= 8) {
+      trend = recent[dim] > prior[dim] ? "up" : recent[dim] < prior[dim] ? "down" : "stable";
+    }
+    return { dimension: dim, score, trend, ...DIMENSION_META[dim] };
+  });
+}
+
+function computeStreak(logs: DailyLog[]): number {
+  const dates = new Set(logs.map((l) => l.date));
+  const cursor = new Date();
+  // A streak can end today or yesterday (today may not be logged yet).
+  if (!dates.has(toDateStr(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (dates.has(toDateStr(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
 export default function DashboardPage() {
-  const activeProtocol = protocols.find((p) => p.status === "active");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<DailyLog[]>([]);
+  const [protocolList, setProtocolList] = useState<ApiProtocol[]>([]);
+  const [profiles, setProfiles] = useState<EnergyProfile[]>([]);
+  const [seeding, setSeeding] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setError(null);
+      const [fetchedLogs, fetchedProtocols, fetchedProfiles] = await Promise.all([
+        listDailyLogs(30),
+        listProtocols(),
+        listEnergyProfiles(2),
+      ]);
+      setLogs(fetchedLogs);
+      setProtocolList(fetchedProtocols);
+      setProfiles(fetchedProfiles);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleSeed() {
+    setSeeding(true);
+    setError(null);
+    try {
+      await seedDemoData();
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load demo data");
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  async function handleToggleHabit(habitId: string) {
+    const protocol = protocolList.find((p) =>
+      p.status === "active" && p.habits.some((h) => h.id === habitId)
+    );
+    if (!protocol) return;
+    try {
+      const updated = await toggleHabitCompletion(protocol, habitId);
+      setProtocolList((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update habit");
+    }
+  }
+
+  const latestLog = logs[logs.length - 1];
+  const overallScore = latestLog?.energyScore ?? 0;
+  const streak = computeStreak(logs);
+  const dimensionScores = buildDimensionScores(profiles, logs);
+  const sparklineData = logs.map((log) => ({ date: log.date, score: log.energyScore }));
+  const activeProtocol = protocolList.find((p) => p.status === "active");
   const todayHabits = activeProtocol?.habits || [];
+  const isEmpty =
+    !loading && logs.length === 0 && protocolList.length === 0 && profiles.length === 0;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Your daily energy overview</p>
+        </div>
+        <div className="flex items-center justify-center py-24 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span className="text-sm">Loading your energy data…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isEmpty) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Your daily energy overview</p>
+        </div>
+        {error && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <Sparkles className="h-10 w-10 text-muted-foreground/50 mb-4" />
+            <h2 className="text-lg font-semibold">No energy data yet</h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+              Take an assessment, log your first day, or load demo data to see Salve in action.
+            </p>
+            <Button className="mt-6" onClick={handleSeed} disabled={seeding}>
+              {seeding ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading demo data…
+                </>
+              ) : (
+                "Load demo data"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -97,19 +277,25 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Your daily energy overview</p>
       </div>
 
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         {/* Energy Circle */}
         <Card className="flex flex-col items-center justify-center py-8">
-          <EnergyCircle score={overallEnergyScore} />
+          <EnergyCircle score={overallScore} />
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <Flame className="h-4 w-4 text-orange-500" />
-            <span className="font-semibold text-foreground">{currentStreak}</span> day streak
+            <span className="font-semibold text-foreground">{streak}</span> day streak
           </div>
         </Card>
 
         {/* 4 Quadrant Cards */}
         <div className="grid gap-4 sm:grid-cols-2">
-          {currentDimensionScores.map((dim) => (
+          {dimensionScores.map((dim) => (
             <Card key={dim.dimension}>
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between">
@@ -160,6 +346,7 @@ export default function DashboardPage() {
                   <label
                     key={habit.id}
                     className="flex items-center gap-3 cursor-pointer group"
+                    onClick={() => void handleToggleHabit(habit.id)}
                   >
                     {habit.completedToday ? (
                       <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
@@ -191,11 +378,19 @@ export default function DashboardPage() {
             <CardTitle className="text-base">30-Day Energy</CardTitle>
           </CardHeader>
           <CardContent>
-            <Sparkline data={sparklineData} />
-            <div className="mt-3 flex justify-between text-xs text-muted-foreground">
-              <span>{sparklineData[0]?.date.slice(5)}</span>
-              <span>Today</span>
-            </div>
+            {sparklineData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No logs yet — record your first daily log to see your trend.
+              </p>
+            ) : (
+              <>
+                <Sparkline data={sparklineData} />
+                <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+                  <span>{sparklineData[0]?.date.slice(5)}</span>
+                  <span>Today</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

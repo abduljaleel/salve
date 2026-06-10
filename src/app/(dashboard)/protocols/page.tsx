@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  protocols,
   protocolTypeLabels,
   protocolTypeColors,
   type Protocol,
 } from "@/lib/data/energy";
-import { Plus, ArrowRight, Pause, Play, CheckCircle, X } from "lucide-react";
+import { createProtocol, listProtocols, type ApiProtocol } from "@/lib/data/api";
+import { Plus, ArrowRight, Pause, Play, CheckCircle, X, Loader2, ListChecks } from "lucide-react";
 
 function StatusIcon({ status }: { status: Protocol["status"] }) {
   switch (status) {
@@ -42,6 +42,53 @@ export default function ProtocolsPage() {
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState<Protocol["type"]>("morning");
   const [formWeeks, setFormWeeks] = useState("4");
+  const [protocolList, setProtocolList] = useState<ApiProtocol[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const fetched = await listProtocols();
+        if (!cancelled) setProtocolList(fetched);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load protocols");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleCreate() {
+    if (!formName.trim()) {
+      setError("Protocol name is required");
+      return;
+    }
+    setCreating(true);
+    setError(null);
+    try {
+      const created = await createProtocol({
+        name: formName.trim(),
+        type: formType,
+        durationWeeks: Math.max(1, Number(formWeeks) || 4),
+      });
+      setProtocolList((prev) => [...prev, created]);
+      setShowForm(false);
+      setFormName("");
+      setFormType("morning");
+      setFormWeeks("4");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create protocol");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -64,6 +111,12 @@ export default function ProtocolsPage() {
           )}
         </Button>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Create Form */}
       {showForm && (
@@ -109,63 +162,86 @@ export default function ProtocolsPage() {
                 />
               </div>
             </div>
-            <Button className="mt-4" onClick={() => setShowForm(false)}>
-              Create Protocol
+            <Button className="mt-4" onClick={handleCreate} disabled={creating}>
+              {creating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating…
+                </>
+              ) : (
+                <>Create Protocol</>
+              )}
             </Button>
           </CardContent>
         </Card>
       )}
 
       {/* Protocol Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {protocols.map((proto) => (
-          <Link key={proto.id} href={`/protocols/${proto.id}`}>
-            <Card className="hover:ring-2 hover:ring-primary/20 transition-all cursor-pointer h-full">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{proto.name}</CardTitle>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="flex gap-2 mt-1">
-                  <Badge
-                    variant="secondary"
-                    className={protocolTypeColors[proto.type]}
-                  >
-                    {protocolTypeLabels[proto.type]}
-                  </Badge>
-                  <Badge variant="secondary" className={statusColor(proto.status)}>
-                    <StatusIcon status={proto.status} />
-                    <span className="ml-1 capitalize">{proto.status}</span>
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-2xl font-bold">{proto.habits.length}</p>
-                    <p className="text-xs text-muted-foreground">Habits</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-24 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span className="text-sm">Loading protocols…</span>
+        </div>
+      ) : protocolList.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <ListChecks className="h-10 w-10 text-muted-foreground/50 mb-4" />
+            <h2 className="text-lg font-semibold">No protocols yet</h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+              Create your first performance protocol to start stacking habits.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {protocolList.map((proto) => (
+            <Link key={proto.id} href={`/protocols/${proto.id}`}>
+              <Card className="hover:ring-2 hover:ring-primary/20 transition-all cursor-pointer h-full">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{proto.name}</CardTitle>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{proto.durationWeeks}w</p>
-                    <p className="text-xs text-muted-foreground">Duration</p>
+                  <div className="flex gap-2 mt-1">
+                    <Badge
+                      variant="secondary"
+                      className={protocolTypeColors[proto.type]}
+                    >
+                      {protocolTypeLabels[proto.type]}
+                    </Badge>
+                    <Badge variant="secondary" className={statusColor(proto.status)}>
+                      <StatusIcon status={proto.status} />
+                      <span className="ml-1 capitalize">{proto.status}</span>
+                    </Badge>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{proto.complianceRate}%</p>
-                    <p className="text-xs text-muted-foreground">Compliance</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold">{proto.habits.length}</p>
+                      <p className="text-xs text-muted-foreground">Habits</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{proto.durationWeeks}w</p>
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{proto.complianceRate}%</p>
+                      <p className="text-xs text-muted-foreground">Compliance</p>
+                    </div>
                   </div>
-                </div>
-                {/* Compliance bar */}
-                <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-green-500 transition-all"
-                    style={{ width: `${proto.complianceRate}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                  {/* Compliance bar */}
+                  <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-green-500 transition-all"
+                      style={{ width: `${proto.complianceRate}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
