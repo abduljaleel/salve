@@ -4,9 +4,9 @@ export const appConfig = {
   url: "https://salve.dk",
   navItems: [
     { title: "Dashboard", href: "/dashboard", icon: "dashboard" },
-    { title: "Incidents", href: "/incidents", icon: "activity" },
-    { title: "Commits", href: "/commits", icon: "zap" },
-    { title: "Traces", href: "/traces", icon: "file" },
-    { title: "Health", href: "/health", icon: "chart" },
+    { title: "Assess", href: "/assess", icon: "activity" },
+    { title: "Daily Log", href: "/log", icon: "zap" },
+    { title: "Protocols", href: "/protocols", icon: "file" },
+    { title: "Trends", href: "/trends", icon: "chart" },
   ],
 };
