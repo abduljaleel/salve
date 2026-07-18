@@ -254,6 +254,35 @@ function normalizeMeta(meta: ProtocolMeta | null): ProtocolMeta {
   return { compliance_rate: meta?.compliance_rate, completions: meta?.completions ?? {} };
 }
 
+/**
+ * Derives a live compliance rate from the persisted completion history over the
+ * trailing 7 days: (completions in window) / (habits × 7). The stored
+ * `compliance_rate` is deliberately ignored so seeded protocols don't freeze at
+ * their seed value and user-created protocols don't stay stuck at 0%. Falls back
+ * to the stored value (or today's ratio) only when there is no completion history
+ * yet, so a freshly created protocol still reads sensibly.
+ */
+function deriveComplianceRate(
+  habits: { id: string; completedToday: boolean }[],
+  meta: ProtocolMeta
+): number {
+  if (habits.length === 0) return 0;
+  const hasHistory = Object.values(meta.completions).some((dates) => dates.length > 0);
+  if (!hasHistory) {
+    const completedToday = habits.filter((h) => h.completedToday).length;
+    return meta.compliance_rate ?? Math.round((completedToday / habits.length) * 100);
+  }
+  const now = new Date();
+  const window = new Set<string>();
+  for (let d = 0; d < 7; d++) window.add(toDateStr(addDays(now, -d)));
+  let completed = 0;
+  for (const habit of habits) {
+    const dates = meta.completions[habit.id] ?? [];
+    completed += dates.filter((dt) => window.has(dt)).length;
+  }
+  return Math.round((completed / (habits.length * 7)) * 100);
+}
+
 function mapProtocol(row: ProtocolRow, habitRows: HabitRow[]): ApiProtocol {
   const meta = normalizeMeta(row.habits);
   const today = todayStr();
@@ -264,16 +293,13 @@ function mapProtocol(row: ProtocolRow, habitRows: HabitRow[]): ApiProtocol {
     completedToday: (meta.completions[h.id] ?? []).includes(today),
     streak: h.current_streak ?? 0,
   }));
-  const completedToday = habits.filter((h) => h.completedToday).length;
   return {
     id: row.id,
     name: row.name,
     type: (row.protocol_type as Protocol["type"]) ?? "morning",
     status: (row.status as Protocol["status"]) ?? "active",
     durationWeeks: row.duration_weeks ?? 0,
-    complianceRate:
-      meta.compliance_rate ??
-      (habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0),
+    complianceRate: deriveComplianceRate(habits, meta),
     startedAt: row.created_at ? row.created_at.slice(0, 10) : todayStr(),
     habits,
     meta,
@@ -444,12 +470,14 @@ export async function toggleHabitCompletion(
   if (habitRes.error) throw new Error(habitRes.error.message);
   if (protoRes.error) throw new Error(protoRes.error.message);
 
+  const updatedHabits = protocol.habits.map((h) =>
+    h.id === habitId ? { ...h, completedToday: completing, streak: newStreak } : h
+  );
   return {
     ...protocol,
     meta: newMeta,
-    habits: protocol.habits.map((h) =>
-      h.id === habitId ? { ...h, completedToday: completing, streak: newStreak } : h
-    ),
+    complianceRate: deriveComplianceRate(updatedHabits, newMeta),
+    habits: updatedHabits,
   };
 }
 
@@ -495,6 +523,8 @@ export async function createProgram(input: {
   name: string;
   description: string;
   durationWeeks: number;
+  participantCount?: number;
+  status?: string;
 }): Promise<void> {
   const { supabase, orgId } = await getCtx();
   const { error } = await supabase.from("programs").insert({
@@ -502,8 +532,9 @@ export async function createProgram(input: {
     name: input.name,
     description: input.description,
     duration_weeks: input.durationWeeks,
+    participant_count: input.participantCount ?? 0,
     protocol_template: {},
-    status: "draft",
+    status: input.status ?? "draft",
   });
   if (error) throw new Error(error.message);
 }
@@ -537,17 +568,6 @@ export function deriveDimensionScores(log: DailyLog): Record<Dimension, number> 
 }
 
 // ── Demo seeding ─────────────────────────────────────────────────────────────
-
-export async function hasAnyData(): Promise<boolean> {
-  const { supabase, userId } = await getCtx();
-  const [logs, protos] = await Promise.all([
-    supabase.from("daily_logs").select("id", { count: "exact", head: true }).eq("user_id", userId),
-    supabase.from("protocols").select("id", { count: "exact", head: true }).eq("user_id", userId),
-  ]);
-  if (logs.error) throw new Error(logs.error.message);
-  if (protos.error) throw new Error(protos.error.message);
-  return (logs.count ?? 0) > 0 || (protos.count ?? 0) > 0;
-}
 
 /**
  * Seeds the demo content from the existing seed arrays:

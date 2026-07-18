@@ -305,23 +305,10 @@ export const sparklineData = dailyLogs.map((log) => ({
   score: log.energyScore,
 }));
 
-// ── Weekly Compliance Grid (for protocol detail) ───────────────────────────
-
-export function getWeeklyComplianceGrid(protocolId: string): Record<string, ("done" | "missed" | "future")[]> {
-  const protocol = protocols.find((p) => p.id === protocolId);
-  if (!protocol) return {};
-
-  const grid: Record<string, ("done" | "missed" | "future")[]> = {};
-  for (const habit of protocol.habits) {
-    grid[habit.id] = Array.from({ length: 7 }, (_, i) => {
-      if (i >= 5) return "future";
-      return Math.random() > 0.3 ? "done" : "missed";
-    });
-  }
-  return grid;
-}
-
 // ── Trend Data ─────────────────────────────────────────────────────────────
+// Note: dimension trends are derived deterministically from daily logs in
+// `deriveDimensionScores` (src/lib/data/api.ts). This interface is the shared
+// shape those derived rows conform to.
 
 export interface DimensionTrend {
   date: string;
@@ -330,30 +317,6 @@ export interface DimensionTrend {
   emotional: number;
   social: number;
 }
-
-export function getDimensionTrends(): DimensionTrend[] {
-  return dailyLogs.map((log) => {
-    const base = log.energyScore;
-    return {
-      date: log.date,
-      physical: Math.max(20, Math.min(100, base + Math.round(Math.random() * 20 - 10))),
-      mental: Math.max(20, Math.min(100, base + Math.round(Math.random() * 20 - 15))),
-      emotional: Math.max(20, Math.min(100, base + Math.round(Math.random() * 20 - 5))),
-      social: Math.max(20, Math.min(100, base + Math.round(Math.random() * 20 - 12))),
-    };
-  });
-}
-
-// ── Insights ───────────────────────────────────────────────────────────────
-
-export const mockInsights: Insight[] = [
-  { text: "Your energy is 18% higher on days with 7+ hours of sleep", type: "positive" },
-  { text: "Tuesday is consistently your lowest energy day", type: "warning" },
-  { text: "Exercise in the morning correlates with +12 energy points", type: "positive" },
-  { text: "Your social energy dips mid-week — consider scheduling a check-in", type: "neutral" },
-  { text: "Your meditation streak boosted mental scores by 15% over 2 weeks", type: "positive" },
-  { text: "Stress levels peak when focus hours exceed 5 per day", type: "warning" },
-];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

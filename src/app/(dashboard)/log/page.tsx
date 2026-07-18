@@ -11,8 +11,8 @@ import {
   getEnergyCalendarClass,
   type DailyLog,
 } from "@/lib/data/energy";
-import { listDailyLogs, upsertDailyLog, todayStr } from "@/lib/data/api";
-import { CalendarDays, PenLine, Loader2 } from "lucide-react";
+import { deleteDailyLog, listDailyLogs, upsertDailyLog, todayStr } from "@/lib/data/api";
+import { CalendarDays, PenLine, Loader2, Trash2 } from "lucide-react";
 
 const moodOptions: DailyLog["mood"][] = ["great", "good", "okay", "low", "bad"];
 
@@ -106,6 +106,22 @@ export default function LogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<DailyLog[]>([]);
+  const [dateLabel, setDateLabel] = useState("");
+  const [clearing, setClearing] = useState(false);
+
+  // Format the date on the client only: the (dashboard) layout is dynamically
+  // server-rendered in UTC, so rendering a local-timezone date string during SSR
+  // can mismatch the client and trigger a hydration error.
+  useEffect(() => {
+    setDateLabel(
+      new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +183,32 @@ export default function LogPage() {
     }
   }
 
+  async function handleClearToday() {
+    setClearing(true);
+    setError(null);
+    try {
+      const today = todayStr();
+      await deleteDailyLog(today);
+      setLogs((prev) => prev.filter((l) => l.date !== today));
+      // Reset the form back to its defaults so it reads as "no log for today".
+      setEnergy(70);
+      setMood("good");
+      setSleepHours("7.5");
+      setSleepQuality(4);
+      setExerciseMin("30");
+      setFocusHours("4");
+      setStressLevel(2);
+      setNotes("");
+      setSaved(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to clear log");
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  const hasTodayLog = logs.some((l) => l.date === todayStr());
+
   return (
     <div className="space-y-6">
       <div>
@@ -181,14 +223,7 @@ export default function LogPage() {
             <CardTitle className="flex items-center gap-2 text-base">
               <PenLine className="h-4 w-4" /> Log Today
             </CardTitle>
-            <CardDescription>
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </CardDescription>
+            <CardDescription>{dateLabel}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {saved && (
@@ -330,15 +365,34 @@ export default function LogPage() {
               />
             </div>
 
-            <Button onClick={handleSave} className="w-full" disabled={saving || loading}>
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
-                </>
-              ) : (
-                <>Save Today&apos;s Log</>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} className="flex-1" disabled={saving || loading}>
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                  </>
+                ) : (
+                  <>Save Today&apos;s Log</>
+                )}
+              </Button>
+              {hasTodayLog && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClearToday}
+                  disabled={clearing || saving || loading}
+                  title="Delete today's log"
+                >
+                  {clearing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" /> Clear
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
+            </div>
           </CardContent>
         </Card>
 

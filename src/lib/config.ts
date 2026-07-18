@@ -7,6 +7,7 @@ export const appConfig = {
     { title: "Assess", href: "/assess", icon: "activity" },
     { title: "Daily Log", href: "/log", icon: "zap" },
     { title: "Protocols", href: "/protocols", icon: "file" },
+    { title: "Programs", href: "/programs", icon: "users" },
     { title: "Trends", href: "/trends", icon: "chart" },
   ],
 };

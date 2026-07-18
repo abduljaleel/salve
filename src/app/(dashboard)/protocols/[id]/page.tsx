@@ -2,21 +2,38 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   protocolTypeLabels,
   protocolTypeColors,
   dimensionIcons,
+  type Dimension,
 } from "@/lib/data/energy";
 import {
+  addHabit,
+  deleteProtocol,
   getProtocol,
   toDateStr,
   toggleHabitCompletion,
+  updateProtocolStatus,
   type ApiProtocol,
 } from "@/lib/data/api";
-import { ArrowLeft, Flame, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Flame,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Plus,
+  Pause,
+  Play,
+  Trash2,
+} from "lucide-react";
 
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -49,9 +66,15 @@ export default function ProtocolDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [protocol, setProtocol] = useState<ApiProtocol | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [habitName, setHabitName] = useState("");
+  const [habitCategory, setHabitCategory] = useState<Dimension>("physical");
+  const [addingHabit, setAddingHabit] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +101,57 @@ export default function ProtocolDetailPage({
       setProtocol(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update habit");
+    }
+  }
+
+  async function handleAddHabit() {
+    if (!protocol || !habitName.trim()) return;
+    setAddingHabit(true);
+    setError(null);
+    try {
+      await addHabit({ protocolId: protocol.id, name: habitName.trim(), category: habitCategory });
+      const fetched = await getProtocol(protocol.id);
+      setProtocol(fetched);
+      setHabitName("");
+      setHabitCategory("physical");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add habit");
+    } finally {
+      setAddingHabit(false);
+    }
+  }
+
+  async function handleStatusChange(next: ApiProtocol["status"]) {
+    if (!protocol) return;
+    setStatusUpdating(true);
+    setError(null);
+    try {
+      await updateProtocolStatus(protocol.id, next);
+      setProtocol({ ...protocol, status: next });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update status");
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!protocol) return;
+    if (
+      !window.confirm(
+        `Delete "${protocol.name}"? This permanently removes the protocol and all its habits.`
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteProtocol(protocol.id);
+      router.push("/protocols");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete protocol");
+      setDeleting(false);
     }
   }
 
@@ -125,7 +199,7 @@ export default function ProtocolDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <Link href="/protocols">
           <Button variant="outline" size="icon">
             <ArrowLeft className="h-4 w-4" />
@@ -141,6 +215,53 @@ export default function ProtocolDetailPage({
               {protocol.status}
             </Badge>
           </div>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {protocol.status === "active" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleStatusChange("paused")}
+              disabled={statusUpdating}
+            >
+              <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
+            </Button>
+          )}
+          {protocol.status === "paused" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleStatusChange("active")}
+              disabled={statusUpdating}
+            >
+              <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
+            </Button>
+          )}
+          {protocol.status !== "completed" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleStatusChange("completed")}
+              disabled={statusUpdating}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Mark completed
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+          >
+            {deleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
@@ -191,7 +312,7 @@ export default function ProtocolDetailPage({
             </div>
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {protocol.habits.length === 0 ? (
             <p className="text-sm text-muted-foreground">No habits in this protocol yet.</p>
           ) : (
@@ -226,6 +347,59 @@ export default function ProtocolDetailPage({
               ))}
             </div>
           )}
+
+          {/* Add a new habit to this protocol */}
+          <div className="border-t pt-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="habit-name" className="text-xs text-muted-foreground">
+                  New habit
+                </Label>
+                <Input
+                  id="habit-name"
+                  placeholder="e.g. 10 min meditation"
+                  value={habitName}
+                  onChange={(e) => setHabitName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleAddHabit();
+                    }
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="habit-category" className="text-xs text-muted-foreground">
+                  Category
+                </Label>
+                <select
+                  id="habit-category"
+                  className="flex h-8 w-full rounded-lg border border-border bg-background px-3 text-sm sm:w-40"
+                  value={habitCategory}
+                  onChange={(e) => setHabitCategory(e.target.value as Dimension)}
+                >
+                  <option value="physical">Physical</option>
+                  <option value="mental">Mental</option>
+                  <option value="emotional">Emotional</option>
+                  <option value="social">Social</option>
+                </select>
+              </div>
+              <Button
+                onClick={() => void handleAddHabit()}
+                disabled={addingHabit || !habitName.trim()}
+              >
+                {addingHabit ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" /> Add habit
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

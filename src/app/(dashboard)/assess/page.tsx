@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { assessmentQuestions, type Dimension } from "@/lib/data/energy";
@@ -163,6 +163,9 @@ export default function AssessPage() {
   const [showResults, setShowResults] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Snapshot of the answers that were last persisted, so re-entering the results
+  // screen (Back → See Results) without changes doesn't insert a duplicate row.
+  const savedAnswersRef = useRef<string | null>(null);
 
   const currentDimension = dimensions[currentStep];
   const currentQuestions = assessmentQuestions.filter(
@@ -210,9 +213,20 @@ export default function AssessPage() {
         sleepQuality: sleepAnswer,
       });
       setSaveState("saved");
+      savedAnswersRef.current = JSON.stringify(answers);
     } catch (e) {
       setSaveState("error");
       setSaveError(e instanceof Error ? e.message : "Failed to save your profile");
+    }
+  }
+
+  function handleAnswer(id: string, value: number) {
+    setAnswers((prev) => ({ ...prev, [id]: value }));
+    // A changed answer invalidates the last save, so allow it to persist again.
+    savedAnswersRef.current = null;
+    if (saveState !== "idle") {
+      setSaveState("idle");
+      setSaveError(null);
     }
   }
 
@@ -221,6 +235,10 @@ export default function AssessPage() {
       setCurrentStep(currentStep + 1);
     } else {
       setShowResults(true);
+      // Skip the insert when these exact answers were already saved.
+      if (saveState === "saved" && savedAnswersRef.current === JSON.stringify(answers)) {
+        return;
+      }
       void persistProfile();
     }
   }
@@ -240,6 +258,7 @@ export default function AssessPage() {
     setShowResults(false);
     setSaveState("idle");
     setSaveError(null);
+    savedAnswersRef.current = null;
   }
 
   if (showResults) {
@@ -387,7 +406,7 @@ export default function AssessPage() {
               <p className="text-sm font-medium text-center">{q.text}</p>
               <ScaleSelector
                 value={answers[q.id] || 0}
-                onChange={(v) => setAnswers({ ...answers, [q.id]: v })}
+                onChange={(v) => handleAnswer(q.id, v)}
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-2 px-2">
                 <span>Very low</span>
